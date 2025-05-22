@@ -1,17 +1,20 @@
-// src/components/prode/ProdeView.tsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import MatchCard from '../MatchCard'; // Ajusta ruta si es necesario
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import MatchCard from '../MatchCard'; // Asegúrate que la ruta sea correcta
 import { initialMatchesData } from '../../data/matchesData';
 import { type Match, type StoredPredictions } from '../../types';
 import { groupStageTeams } from '../../data/teamsData';
 
-const LOCAL_STORAGE_KEY_PRODE = 'prodeMundial2026PredictionsViteTS_ImprovedUI'; // Usa la misma key que antes
+const LOCAL_STORAGE_KEY_PRODE = 'prodeMundial2026PredictionsViteTS_ImprovedUI_V2'; // Key actualizada si hay cambios estructurales
 
 interface GroupedMatches {
     [groupName: string]: Match[];
 }
 
-const ProdeView: React.FC = () => {
+interface ProdeViewProps {
+    topOffsetForSubSticky: number; // Offset desde la parte superior de la ventana hasta donde comienza esta vista
+}
+
+const ProdeView: React.FC<ProdeViewProps> = ({ topOffsetForSubSticky }) => {
     const [matches, setMatches] = useState<Match[]>(() => {
         const storedPredictionsJSON = localStorage.getItem(LOCAL_STORAGE_KEY_PRODE);
         const storedPredictions: StoredPredictions = storedPredictionsJSON ? JSON.parse(storedPredictionsJSON) : {};
@@ -26,11 +29,22 @@ const ProdeView: React.FC = () => {
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const groupNames = useMemo(() => groupStageTeams.map(g => g.name), []);
 
+    // Referencia al contenedor de la barra de stats y navegación de grupos para medir su altura
+    const prodeSubNavRef = useRef<HTMLDivElement>(null);
+    const [prodeSubNavHeight, setProdeSubNavHeight] = useState(0);
+
     useEffect(() => {
         if (groupNames.length > 0 && selectedGroup === null) {
-            setSelectedGroup(groupNames[0]);
+            setSelectedGroup(groupNames[0]); // Selecciona el primer grupo por defecto
         }
     }, [groupNames, selectedGroup]);
+
+    useEffect(() => {
+        // Medir la altura de la sub-navegación del prode
+        if (prodeSubNavRef.current) {
+            setProdeSubNavHeight(prodeSubNavRef.current.offsetHeight);
+        }
+    }, [prodeSubNavRef, selectedGroup]); // Re-medir si cambia el grupo (por si el contenido de la nav cambia su altura)
 
     useEffect(() => {
         const predictionsToStore: StoredPredictions = matches.reduce((acc, match) => {
@@ -74,7 +88,7 @@ const ProdeView: React.FC = () => {
                 acc[groupNameKey] = [];
             }
             acc[groupNameKey].push(match);
-            acc[groupNameKey].sort((a, b) => {
+            acc[groupNameKey].sort((a, b) => { // Ordenar partidos dentro de cada grupo
                 const dateA = new Date(`${a.date}T${a.time}`);
                 const dateB = new Date(`${b.date}T${b.time}`);
                 return dateA.getTime() - dateB.getTime();
@@ -87,65 +101,75 @@ const ProdeView: React.FC = () => {
         if (selectedGroup && groupedMatchesByName[selectedGroup]) {
             return groupedMatchesByName[selectedGroup];
         }
-        return [];
+        return []; // Si no hay grupo seleccionado o no se encuentra
     }, [selectedGroup, groupedMatchesByName]);
 
-    // Para calcular la altura del sticky en la vista "Todos"
-    // Necesitarías medir la altura de los elementos sticky por encima del título del grupo.
-    // Ejemplo: const stickyHeaderHeight = "220px"; // Ajustar este valor
-    // Y luego usarlo en el `top` del h2: `sticky top-[${stickyHeaderHeight}]`
+    // Calculamos el offset para los títulos de grupo cuando se muestra "Todos los Grupos"
+    const topForGroupTitleSticky = topOffsetForSubSticky + prodeSubNavHeight;
 
     return (
         <>
-            {/* Contenedor para elementos sticky (barra de stats y barra de grupos) */}
-            <div className="sticky top-[80px] sm:top-[92px] z-30 bg-background/80 backdrop-blur-md shadow-sm">
-                <div className="container mx-auto px-2 sm:px-4 py-3 border-b border-gray-200">
-                    <div className="p-3 bg-surface rounded-lg shadow-md-elevation flex flex-col sm:flex-row justify-between items-center gap-3">
-                        <p className="text-sm sm:text-base text-gray-700 text-center sm:text-left">
-                            Prode Lleno: <span className="font-bold text-primary">{countCompletedPredictions()}</span> de <span className="font-bold">{matches.length}</span>
-                        </p>
-                        <button
-                            onClick={handleResetPredictions}
-                            className="bg-danger hover:bg-dangerHover text-white font-semibold py-2 px-3 rounded-lg shadow-sm transition-colors duration-150 ease-in-out text-xs sm:text-sm"
-                        >
-                            Borrar Prode
-                        </button>
-                    </div>
-                </div>
-
-                {groupNames.length > 0 && (
-                    <div className="container mx-auto px-2 sm:px-4 py-3 border-b border-gray-200">
-                        <nav className="flex flex-wrap justify-center gap-1 sm:gap-2">
+            {/* Barra de Estadísticas y Navegación de Grupos del Prode */}
+            <div
+                ref={prodeSubNavRef}
+                className="sticky z-30 bg-background/80 backdrop-blur-md shadow-sm"
+                style={{ top: `${topOffsetForSubSticky}px` }} // Se posiciona debajo de la barra de pestañas principal
+            >
+                {/* Contenedor para centrar y dar padding */}
+                <div className="container mx-auto px-2 sm:px-4">
+                    {/* Barra de Estadísticas */}
+                    <div className="py-3 border-b border-gray-200">
+                        <div className="p-3 bg-surface rounded-lg shadow-md-elevation flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <p className="text-sm sm:text-base text-gray-700 text-center sm:text-left">
+                                Prode Lleno: <span className="font-bold text-primary">{countCompletedPredictions()}</span> de <span className="font-bold">{matches.length}</span>
+                            </p>
                             <button
-                                onClick={() => setSelectedGroup(null)} // 'null' para "Todos los Grupos"
-                                className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
-                  ${selectedGroup === null ?
-                                        'bg-secondary text-black shadow-md scale-105' :
-                                        'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+                                onClick={handleResetPredictions}
+                                className="bg-danger hover:bg-dangerHover text-white font-semibold py-2 px-3 rounded-lg shadow-sm transition-colors duration-150 ease-in-out text-xs sm:text-sm"
                             >
-                                Todos los Grupos
+                                Borrar Prode
                             </button>
-                            {groupNames.map(groupName => (
+                        </div>
+                    </div>
+
+                    {/* Navegación de Grupos del Prode */}
+                    {groupNames.length > 0 && (
+                        <div className="py-3 border-b border-gray-200">
+                            <nav className="flex flex-wrap justify-center gap-1 sm:gap-2">
                                 <button
-                                    key={groupName}
-                                    onClick={() => setSelectedGroup(groupName)}
+                                    onClick={() => setSelectedGroup(null)} // 'null' para "Todos los Grupos"
                                     className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
-                    ${selectedGroup === groupName ?
-                                            'bg-primary text-white shadow-md scale-105' :
+                      ${selectedGroup === null ?
+                                            'bg-secondary text-black shadow-md scale-105' :
                                             'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
                                 >
-                                    {groupName}
+                                    Todos los Grupos
                                 </button>
-                            ))}
-                        </nav>
-                    </div>
-                )}
+                                {groupNames.map(groupName => (
+                                    <button
+                                        key={groupName}
+                                        onClick={() => setSelectedGroup(groupName)}
+                                        className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
+                        ${selectedGroup === groupName ?
+                                                'bg-primary text-white shadow-md scale-105' :
+                                                'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+                                    >
+                                        {groupName}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            <main className="container mx-auto px-2 sm:px-4 pb-12 flex-grow pt-4">
-                {selectedGroup !== null ? (
+            {/* Contenido Principal del Prode (Lista de Partidos) */}
+            <main className="container mx-auto px-2 sm:px-4 pb-12 flex-grow pt-4"> {/* pt-4 para dar espacio después del sticky */}
+                {selectedGroup !== null ? ( // Vista de un solo grupo seleccionado
                     matchesToDisplay.length > 0 ? (
                         <section>
+                            {/* Podrías añadir un H2 aquí si quieres, aunque el botón activo ya indica el grupo */}
+                            {/* <h2 className="text-2xl font-bold text-primary my-4">{selectedGroup}</h2> */}
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                                 {matchesToDisplay.map(match => (
                                     <MatchCard
@@ -161,11 +185,14 @@ const ProdeView: React.FC = () => {
                             No hay partidos para {selectedGroup} o el grupo está vacío.
                         </p>
                     )
-                ) : (
+                ) : ( // Vista de "Todos los Grupos"
                     Object.keys(groupedMatchesByName).length > 0 ? (
                         Object.entries(groupedMatchesByName).map(([groupName, groupMatchesList]) => (
                             <section key={groupName} className="mb-10">
-                                <h2 className={`text-2xl font-bold text-primary mb-3 p-3 bg-primary/10 rounded-t-lg border-b-2 border-primary sticky z-10 top-[210px]`}> {/* AJUSTA ESTE VALOR DE TOP */}
+                                <h2
+                                    className="text-2xl font-bold text-primary mb-3 p-3 bg-primary/10 rounded-t-lg border-b-2 border-primary sticky z-10"
+                                    style={{ top: `${topForGroupTitleSticky}px` }} // Se posiciona debajo de la barra de stats/nav del prode
+                                >
                                     {groupName}
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 p-1">
