@@ -1,0 +1,21 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-background text-onSurface font-sans antialiased;
+}
+
+/* Estilos adicionales para inputs si es necesario para emular Material */
+input[type="number"] {
+  @apply appearance-none m-0; /* Quita flechas de number input en algunos navegadores */
+  -moz-appearance: textfield; /* Firefox */
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
